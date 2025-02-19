@@ -52,6 +52,7 @@ public class GamePanelController : MonoBehaviour
                     true, onCompleted);
             }
         }
+
         
         // 애니메이션 처리
         if (_quizCardQueue.Count > 0)

@@ -31,7 +31,6 @@ public class QuizCardPositionStateContext
 
     public void SetState(IQuizCardPositionState state, bool withAnimation, Action onComplete = null)
     {
-        if (_currentState == state) return;
         
         _currentState = state;
         _currentState.Trasition(withAnimation, onComplete);
@@ -97,6 +96,23 @@ public class QuizCardPositionStateRemove: QuizCardPositionState, IQuizCardPositi
     }
 }
 
+
+public class QuizCardPositionStateFlip : QuizCardPositionState, IQuizCardPositionState
+{
+    public QuizCardPositionStateFlip(QuizCardController quizCardController) : base(quizCardController) { }
+    public void Trasition(bool withAnimation, Action onComplete = null)
+    {
+        var animationDuration = (withAnimation) ? 0.2f : 0f;
+        _rectTransform.DOLocalRotate(new Vector3(0, 90, 0), animationDuration/2, RotateMode.FastBeyond360)
+            .SetEase(Ease.InOutQuad).OnComplete(() =>
+            {
+                _rectTransform.DOLocalRotate(new Vector3(0, 0, 0), animationDuration/2, RotateMode.FastBeyond360)
+                    .SetEase(Ease.InOutQuad);
+                onComplete?.Invoke();
+            });
+    }
+}
+
 public class QuizCardController : MonoBehaviour
 {
     [SerializeField] private GameObject frontPanel;
@@ -110,11 +126,12 @@ public class QuizCardController : MonoBehaviour
     [SerializeField] private GameObject threeOptionButtons;
     [SerializeField] private GameObject oxButtons;
     
-    // Incorrect Back Panel
-    [SerializeField] private TMP_Text heartCountText;
     
     // Timer
     [SerializeField] private GoyaTimer timer;
+    
+    // heart panel
+    [SerializeField] private HeartPanelController heartPanel;
     
     private enum QuizCardPanelType { Front, CorrectBackPanel, InCorrectBackPanel }
 
@@ -130,8 +147,11 @@ public class QuizCardController : MonoBehaviour
     private IQuizCardPositionState _positionStateFirst;
     private IQuizCardPositionState _positionStateSecond;
     private IQuizCardPositionState _positionStateRemove;
+    private IQuizCardPositionState _positionStateFlip;
     private QuizCardPositionStateContext _positionStateContext;
 
+    public enum QuizCardPositionType { First, Second, Remove , Flip}
+    
     private void Awake()
     {
         // 숨겨진 패널의 좌표 저장
@@ -143,6 +163,7 @@ public class QuizCardController : MonoBehaviour
         _positionStateFirst = new QuizCardPositionStateFirst(this);
         _positionStateSecond = new QuizCardPositionStateSecond(this);
         _positionStateRemove = new QuizCardPositionStateRemove(this);
+        _positionStateFlip = new QuizCardPositionStateFlip(this);
         _positionStateContext.SetState(_positionStateRemove, false); // 카드 위치 초기화
     }
 
@@ -155,7 +176,7 @@ public class QuizCardController : MonoBehaviour
         };
     }
     
-    public enum QuizCardPositionType { First, Second, Remove }
+    
     
     /// <summary>
     /// 퀴즈 카드 위치를 지정하는 메서드
@@ -185,6 +206,14 @@ public class QuizCardController : MonoBehaviour
                 break;
             case QuizCardPositionType.Remove:
                 _positionStateContext.SetState(_positionStateRemove, withAnimation, onComplete);
+                break;
+            case QuizCardPositionType.Flip:
+                _positionStateContext.SetState(_positionStateFlip, withAnimation, () =>
+                {
+                    timer.InitTimer();
+                    timer.StartTimer();
+                    onComplete?.Invoke();
+                });
                 break;
         }
     }
@@ -230,8 +259,6 @@ public class QuizCardController : MonoBehaviour
         
         this.onCompleted = onCompleted;
         
-        // Incorrect Back Panel
-        heartCountText.text = GameManager.Instance.heartCount.ToString();
     }
 
     /// <summary>
@@ -242,20 +269,26 @@ public class QuizCardController : MonoBehaviour
     {
         // Timer 일시 정시
         timer.PauseTimer();
+        QuizCardPositionState temp;
         
         if (buttonIndex == _answer)
         {
             Debug.Log("정답!");
             // TODO: 정답 연출
-            
-            SetQuizCardPanelActive(QuizCardPanelType.CorrectBackPanel);
+            SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+            {
+                SetQuizCardPanelActive(QuizCardPanelType.CorrectBackPanel);
+            });
+
         }
         else
         {
             Debug.Log("오답~");
             // TODO: 오답 연출
-            
-            SetQuizCardPanelActive(QuizCardPanelType.InCorrectBackPanel);
+            SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+            {
+                SetQuizCardPanelActive(QuizCardPanelType.InCorrectBackPanel);
+            });
         }
     }
     
@@ -316,18 +349,25 @@ public class QuizCardController : MonoBehaviour
         if (GameManager.Instance.heartCount > 0)
         {
             GameManager.Instance.heartCount--;
-            heartCountText.text = GameManager.Instance.heartCount.ToString();
+            heartPanel.RemoveHeart(() =>
+            {
+                Debug.Log("콜벡됨 onclickquiz");
+                SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+                {
+                    Debug.Log("콜벡됨 flip");
+                    SetQuizCardPanelActive(QuizCardPanelType.Front);
+                    // 타이머 초기화 및 시작
+                    timer.InitTimer();
+                    timer.StartTimer();
+                }); 
+            });
             
-            SetQuizCardPanelActive(QuizCardPanelType.Front);
-            
-            // 타이머 초기화 및 시작
-            timer.InitTimer();
-            timer.StartTimer();
         }
         else
         {
             // 하트가 부족해서 다시도전 불가
             // TODO: 하트 부족 알림
+            heartPanel.EmptyHeart();
         }
     }
     

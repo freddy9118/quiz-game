@@ -45,7 +45,7 @@ public class HeartPanelController : MonoBehaviour
         _heartCountText.text = _heartCount.ToString();
     }
 
-    private void ChangeTextAnimation(bool isAdd)
+    private void ChangeTextAnimation(bool isAdd, Action callback = null)
     {
         float duration = 0.2f;
         float yPos = 40f;
@@ -73,7 +73,8 @@ public class HeartPanelController : MonoBehaviour
             _heartCountText.rectTransform.DOAnchorPosY(0, duration);
             _heartCountText.DOFade(1, duration).OnComplete(() =>
             {
-
+                Debug.Log("콜벡됨 changetxet");
+                callback?.Invoke();
             });
         });
     }
@@ -96,16 +97,17 @@ public class HeartPanelController : MonoBehaviour
         }
     }
 
-    public void EmptyHeart()
+    public void EmptyHeart(Action callback = null)
     {
         // 효과음 재생
         if (UserInformations.IsPlaySFX)
             _audioSource.PlayOneShot(_heartEmptyAudioClip);
         
         GetComponent<RectTransform>().DOPunchPosition(new Vector3(20f, 0, 0), 1f, 7);
+        callback?.Invoke();
     }
 
-    public void RemoveHeart()
+    public void RemoveHeart(Action callback = null)
     {
         // 효과음 재생
         if (UserInformations.IsPlaySFX)
@@ -122,7 +124,11 @@ public class HeartPanelController : MonoBehaviour
         // 하트 수 텍스트 떨어지는 연출
         DOVirtual.DelayedCall(1f, () =>
         {
-            ChangeTextAnimation(false);
+            ChangeTextAnimation(false, () =>
+            {
+                Debug.Log("콜벡됨 removeheart");
+                callback?.Invoke();
+            });
         });
     }
 }
