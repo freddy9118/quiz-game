@@ -1,19 +1,40 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-
+using UnityEngine.UI;
+using DG.Tweening;
 public class MainPanelController : MonoBehaviour
 {
-    [SerializeField] private TMP_Text _heartText;           // 남은 하트 수
-    [SerializeField] private TMP_Text _stageText;           // 현재 스테이지
+    [SerializeField] private Button playButton;
+    [SerializeField] private Sprite newSprite;
+    [SerializeField] private HeartPanelController heartPanel;
 
     /// <summary>
     /// Play Button 눌렀을 때 호출되는 메서드
     /// </summary>
+    private void Start()
+    {
+        playButton.onClick.AddListener(OnClickPlayButton);
+        heartPanel.InitHeartCount();
+    }
+
     public void OnClickPlayButton()
     {
-        GameManager.Instance.StartGame();
+        float animationDuration = 0.2f;
+        playButton.GetComponent<Image>().sprite = newSprite;
+        playButton.GetComponent<RectTransform>().transform.DOScale(1.5f, animationDuration)
+            .SetEase(Ease.OutQuad);
+        playButton.GetComponent<Image>().DOFade(0, animationDuration)
+            .SetEase(Ease.OutQuad)
+            .OnComplete(() =>
+            {
+                playButton.GetComponent<RectTransform>().transform.DOScale(1f, 0);
+                playButton.GetComponent<Image>().DOFade(1, 0);
+                GameManager.Instance.heartCount--;
+                heartPanel.RemoveHeart(() => GameManager.Instance.StartGame());
+            });
     }
 
     #region Main Menu 버튼 클릭 함수

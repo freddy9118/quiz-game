@@ -32,16 +32,16 @@ public class HeartPanelController : MonoBehaviour
     private void Start()
     {
         _heartRemoveImageObject.SetActive(false);
-        InitHeartCount(10);
+        InitHeartCount();
     }
 
     /// <summary>
     /// Heart Panel에 하트 수 초기화
     /// </summary>
     /// <param name="heartCount">하트 수</param>
-    public void InitHeartCount(int heartCount)
+    public void InitHeartCount()
     {
-        _heartCount = heartCount;
+        _heartCount = GameManager.Instance.heartCount;
         _heartCountText.text = _heartCount.ToString();
     }
 
@@ -124,11 +124,7 @@ public class HeartPanelController : MonoBehaviour
         // 하트 수 텍스트 떨어지는 연출
         DOVirtual.DelayedCall(1f, () =>
         {
-            ChangeTextAnimation(false, () =>
-            {
-                Debug.Log("콜벡됨 removeheart");
-                callback?.Invoke();
-            });
+            ChangeTextAnimation(false, callback);
         });
     }
 }

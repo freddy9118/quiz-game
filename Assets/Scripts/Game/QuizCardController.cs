@@ -24,6 +24,105 @@ public interface IQuizCardPositionState
     void Trasition(bool withAnimation, Action onComplete = null);
 }
 
+public class EventState
+{
+    protected QuizCardController _quizCardController;
+    protected RectTransform _rectTransform;
+    protected Image _image;
+    protected TMP_Text _text;
+    protected Button _button;
+    protected CanvasGroup _canvasGroup;
+
+    public EventState(QuizCardController quizCardController, Image image, TMP_Text text, Button button)
+    {
+        _quizCardController = quizCardController;
+        _rectTransform = quizCardController.gameObject.GetComponent<RectTransform>();
+        _image = image;
+        _text = text;
+        _button = button;
+        _canvasGroup = quizCardController.gameObject.GetComponent<CanvasGroup>();
+    }
+}
+
+public class InCorrectState : EventState ,IQuizCardPositionState
+{
+    public InCorrectState(QuizCardController quizCardController, Image image, TMP_Text text, Button button) : 
+        base(quizCardController, image, text, button) { }
+
+    public void Trasition(bool withAnimation, Action onComplete = null)
+    {
+        _button.GetComponent<Image>().color = new Color(0f, 0.13f, 0.6f, 1f);
+        string tmpText = _text.text;
+        _text.text = "";
+        var animationDuration = (withAnimation) ? 0.1f : 0f;
+        _image.DOColor(new Color(0f, 0.13f, 0.6f, 1f), animationDuration * 3);
+        _rectTransform.DOLocalRotate(new Vector3(0, 0, 15), animationDuration, RotateMode.FastBeyond360)
+            .SetLoops(3, LoopType.Yoyo).OnComplete(() =>
+            {
+                _rectTransform.DOLocalRotate(new Vector3(0, 0, 0), animationDuration / 2, RotateMode.FastBeyond360)
+                    .SetEase(Ease.InOutQuad).OnComplete(() =>
+                    {
+                        DOTween.To(() => _text.maxVisibleCharacters, x => _text.maxVisibleCharacters = x,
+                                tmpText.Length, animationDuration * 10)
+                            .SetEase(Ease.Linear)
+                            .OnStart(() => _text.text = tmpText).OnComplete(() =>
+                            {
+                                DOVirtual.DelayedCall(0.5f, () =>
+                                {
+                                    _image.DOColor(new Color(1f, 0.1f, 0.6f, 1f), animationDuration * 3);
+                                    _button.GetComponent<Image>().color = new Color(1, 1, 1, 1f);
+                                    onComplete?.Invoke();
+                                });
+                            });
+                    });
+            });
+    }
+}
+
+public class CorrectState : EventState, IQuizCardPositionState
+{
+    public CorrectState(QuizCardController quizCardController, Image image, TMP_Text text, Button button) : 
+        base(quizCardController, image, text, button) { }
+    public void Trasition(bool withAnimation, Action onComplete = null)
+    {
+        _button.GetComponent<Image>().color = new Color(1f, 0.1f, 0.6f, 1f);
+        string tmpText = _text.text;
+        _text.text = "";
+        var animationDuration = (withAnimation) ? 0.1f : 0f;
+        _image.DOColor(new Color(0f, 0.5f, 0.6f, 1f), animationDuration * 2);
+        _rectTransform.DOScale(1.5f, animationDuration)
+            .SetEase(Ease.OutQuad);
+        _canvasGroup.DOFade(0.5f, animationDuration)
+            .SetEase(Ease.OutQuad).OnComplete(() =>
+            {
+                _rectTransform.DOScale(1f, 0);
+                _canvasGroup.DOFade(1, 0);
+            });
+        DOTween.To(() => _text.maxVisibleCharacters, x => _text.maxVisibleCharacters = x,
+                tmpText.Length, animationDuration * 10)
+            .SetEase(Ease.Linear)
+            .OnStart(() => _text.text = tmpText);
+        DOVirtual.DelayedCall(1f, () =>
+        {
+            _image.DOColor(new Color(1f, 0.1f, 0.6f, 1f), animationDuration * 2);
+            _button.GetComponent<Image>().color = new Color(1f, 1f, 1f, 1f);
+            onComplete?.Invoke();
+        });
+    }
+}
+
+public class EventStateContext
+{
+    private IQuizCardPositionState _state;
+    
+    public void SetEventState(IQuizCardPositionState state, bool withAnimation, Action onComplete = null)
+    {
+        if (_state == state) return;
+        _state = state;
+        _state.Trasition(withAnimation, onComplete);
+    }
+}
+
 // 퀴즈 카드의 위치 상태 전이를 관리할 목적
 public class QuizCardPositionStateContext
 {
@@ -31,6 +130,7 @@ public class QuizCardPositionStateContext
 
     public void SetState(IQuizCardPositionState state, bool withAnimation, Action onComplete = null)
     {
+        if (_currentState == state) return;
         
         _currentState = state;
         _currentState.Trasition(withAnimation, onComplete);
@@ -112,7 +212,21 @@ public class QuizCardPositionStateFlip : QuizCardPositionState, IQuizCardPositio
             });
     }
 }
-
+public class QuizCardPositionStateFlipNormal : QuizCardPositionState, IQuizCardPositionState
+{
+    public QuizCardPositionStateFlipNormal(QuizCardController quizCardController) : base(quizCardController) { }
+    public void Trasition(bool withAnimation, Action onComplete = null)
+    {
+        var animationDuration = (withAnimation) ? 0.2f : 0f;
+        _rectTransform.DOLocalRotate(new Vector3(0, 90, 0), animationDuration/2, RotateMode.FastBeyond360)
+            .SetEase(Ease.InOutQuad).OnComplete(() =>
+            {
+                _rectTransform.DOLocalRotate(new Vector3(0, 0, 0), animationDuration/2, RotateMode.FastBeyond360)
+                    .SetEase(Ease.InOutQuad);
+                onComplete?.Invoke();
+            });
+    }
+}
 public class QuizCardController : MonoBehaviour
 {
     [SerializeField] private GameObject frontPanel;
@@ -125,7 +239,9 @@ public class QuizCardController : MonoBehaviour
     [SerializeField] private Button[] optionButtons;
     [SerializeField] private GameObject threeOptionButtons;
     [SerializeField] private GameObject oxButtons;
-    
+    private Image panelImage;
+    [SerializeField] private TMP_Text correctEventText;
+    [SerializeField] private TMP_Text InCorrectEventText;
     
     // Timer
     [SerializeField] private GoyaTimer timer;
@@ -148,12 +264,24 @@ public class QuizCardController : MonoBehaviour
     private IQuizCardPositionState _positionStateSecond;
     private IQuizCardPositionState _positionStateRemove;
     private IQuizCardPositionState _positionStateFlip;
+    private IQuizCardPositionState _positionStateFlipNormal;
     private QuizCardPositionStateContext _positionStateContext;
+    
+    //추가 이벤트 상태
+    private IQuizCardPositionState _correctState;
+    private IQuizCardPositionState _incorrectState;
+    private EventStateContext _eventStateContext;
+    
+    public enum EventType{Correct, Incorrect}
 
-    public enum QuizCardPositionType { First, Second, Remove , Flip}
+    public enum QuizCardPositionType { First, Second, Remove , Flip, FlipNormal }
     
     private void Awake()
     {
+        //판낼찾기
+        GameObject panelObject = GameObject.Find("Game Panel");
+        panelImage = panelObject.GetComponent<Image>();
+        
         // 숨겨진 패널의 좌표 저장
         _correctBackPanelPosition = correctBackPanel.GetComponent<RectTransform>().anchoredPosition;
         _incorrectBackPanelPosition = incorrectBackPanel.GetComponent<RectTransform>().anchoredPosition;
@@ -164,7 +292,10 @@ public class QuizCardController : MonoBehaviour
         _positionStateSecond = new QuizCardPositionStateSecond(this);
         _positionStateRemove = new QuizCardPositionStateRemove(this);
         _positionStateFlip = new QuizCardPositionStateFlip(this);
+        _positionStateFlipNormal = new QuizCardPositionStateFlipNormal(this);
         _positionStateContext.SetState(_positionStateRemove, false); // 카드 위치 초기화
+        
+        _eventStateContext = new EventStateContext();
     }
 
     private void Start()
@@ -176,7 +307,18 @@ public class QuizCardController : MonoBehaviour
         };
     }
     
-    
+    public void SetEventState(EventType eventType, bool withAnimation, Action onComplete = null)
+    {
+        switch (eventType)
+        {
+            case EventType.Correct:
+                _eventStateContext.SetEventState(_correctState, withAnimation, onComplete);
+                break;
+            case EventType.Incorrect:
+                _eventStateContext.SetEventState(_incorrectState, withAnimation, onComplete);
+                break;
+        }
+    }
     
     /// <summary>
     /// 퀴즈 카드 위치를 지정하는 메서드
@@ -208,12 +350,10 @@ public class QuizCardController : MonoBehaviour
                 _positionStateContext.SetState(_positionStateRemove, withAnimation, onComplete);
                 break;
             case QuizCardPositionType.Flip:
-                _positionStateContext.SetState(_positionStateFlip, withAnimation, () =>
-                {
-                    timer.InitTimer();
-                    timer.StartTimer();
-                    onComplete?.Invoke();
-                });
+                _positionStateContext.SetState(_positionStateFlip, withAnimation, onComplete);
+                break;
+            case QuizCardPositionType.FlipNormal:
+                _positionStateContext.SetState(_positionStateFlipNormal, withAnimation, onComplete);
                 break;
         }
     }
@@ -267,6 +407,8 @@ public class QuizCardController : MonoBehaviour
     /// <param name="buttonIndex"></param>
     public void OnClickOptionButton(int buttonIndex)
     {
+        
+        heartPanel.InitHeartCount();
         // Timer 일시 정시
         timer.PauseTimer();
         QuizCardPositionState temp;
@@ -275,9 +417,13 @@ public class QuizCardController : MonoBehaviour
         {
             Debug.Log("정답!");
             // TODO: 정답 연출
-            SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+            _correctState = new CorrectState(this, panelImage, correctEventText, optionButtons[buttonIndex]);
+            SetEventState(EventType.Correct, true, () =>
             {
-                SetQuizCardPanelActive(QuizCardPanelType.CorrectBackPanel);
+                SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+                {
+                    SetQuizCardPanelActive(QuizCardPanelType.CorrectBackPanel);
+                }); 
             });
 
         }
@@ -285,9 +431,14 @@ public class QuizCardController : MonoBehaviour
         {
             Debug.Log("오답~");
             // TODO: 오답 연출
-            SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+            
+            _incorrectState = new InCorrectState(this, panelImage, correctEventText, optionButtons[buttonIndex]);
+            SetEventState(EventType.Incorrect, true, () =>
             {
-                SetQuizCardPanelActive(QuizCardPanelType.InCorrectBackPanel);
+                SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+                {
+                    SetQuizCardPanelActive(QuizCardPanelType.InCorrectBackPanel);
+                });
             });
         }
     }
@@ -352,7 +503,7 @@ public class QuizCardController : MonoBehaviour
             heartPanel.RemoveHeart(() =>
             {
                 Debug.Log("콜벡됨 onclickquiz");
-                SetQuizCardPosition(QuizCardPositionType.Flip, true, () =>
+                SetQuizCardPosition(QuizCardPositionType.FlipNormal, true, () =>
                 {
                     Debug.Log("콜벡됨 flip");
                     SetQuizCardPanelActive(QuizCardPanelType.Front);
